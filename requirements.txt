@@ -1,0 +1,7 @@
+aiogram==2.16
+aiohttp==3.8.1
+aiovk==4.0.0
+bot==0.0.1
+Django==3.2.9
+sentry_sdk==1.5.0
+vk_messages==1.3
