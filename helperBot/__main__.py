@@ -24,8 +24,8 @@ logger = logging.getLogger(__name__)
 
 
 def main():
-    tg_bot_token = "2073440181:AAE7yzeJgzRGDoTCO6pTU16PxNhoenmYsQY"
-    vk_client_id = "2685278"
+    tg_bot_token = ""
+    vk_client_id = ""
     use_webhook = bool(int(os.getenv('USE_WEBHOOK', '0')))
     app_port = int(os.getenv('PORT', '5000'))
     app_url = os.getenv('APP_URL', '')
