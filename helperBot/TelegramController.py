@@ -1,4 +1,5 @@
 import logging
+from asyncio import sleep
 from urllib.parse import urlparse, parse_qs, urljoin
 from telegram import ParseMode, ReplyKeyboardHide, ReplyKeyboardMarkup
 from telegram.error import (TelegramError, Unauthorized, BadRequest, TimedOut, ChatMigrated, NetworkError)
@@ -41,6 +42,8 @@ class TelegramController:
         start_command_handler = CommandHandler('details', self.details_command_callback)
         dispatcher.add_handler(start_command_handler)
         start_command_handler = CommandHandler('download', self.download_file_callback)
+        dispatcher.add_handler(start_command_handler)
+        start_command_handler = CommandHandler('user', self.user_chat)
         dispatcher.add_handler(start_command_handler)
         unknown_handler = MessageHandler(Filters.command, self.unknown_command_callback)
         dispatcher.add_handler(unknown_handler)
@@ -128,6 +131,19 @@ class TelegramController:
         self.clients[chat_id] = client
         client.persist()
 
+    def user_chat(self, bot, update):
+        chat_id = update.message.chat_id
+        if not chat_id in self.clients:
+            return
+        client = self.clients[chat_id]
+        recepient = update.message.text[6:]
+        res = client.search(recepient)
+        bot.sendMessage(chat_id=chat_id,
+                        text=res,
+                        reply_markup=ReplyKeyboardHide())
+        self.clients[chat_id] = client
+        client.persist()
+
     def pick_command_callback(self, bot, update):
         """
         Handler /pick [vk_user in database]
@@ -138,14 +154,19 @@ class TelegramController:
             self.start_command_callback(bot, update)
             return
 
+        recepient = update.message.text[6:]
         client = self.clients[chat_id]
         client.seen_now()
-        recepient = update.message.text[6:]
-        client.expect_message_to(recepient)
+        if client.expect_message_to(recepient) is None:
+            res = client.search(recepient)
+            print(res)
+            username = self.add_user(bot, update, client, res)
+            client.expect_message_to(username)
+
         bot.sendMessage(chat_id=chat_id,
                         text=message.TYPE_MESSAGE(recepient),
-                        parse_mode=ParseMode.MARKDOWN,
                         reply_markup=TelegramController.keyboard(client.keyboard_markup()))
+
 
     def unpick_command_callback(self, bot, update):
         """
@@ -267,12 +288,12 @@ class TelegramController:
         files = client.get_files(message)
         if files == "there's no such document in your files":
             bot.sendMessage(chat_id=update.message.chat_id,
-                        text=files,
-                        reply_markup=TelegramController.keyboard(client.keyboard_markup()))
+                            text=files,
+                            reply_markup=TelegramController.keyboard(client.keyboard_markup()))
         else:
             bot.sendDocument(chat_id=client.chat_id,
-                         document=files,
-                         reply_markup=TelegramController.keyboard(client.keyboard_markup()))
+                             document=files,
+                             reply_markup=TelegramController.keyboard(client.keyboard_markup()))
         client.next_action = action.NOTHING
 
     def on_token_message(self, bot, update, client):
@@ -340,6 +361,20 @@ class TelegramController:
         if update[0] == 4:
             # When new message received
             self.receive_vk_message(update, client)
+
+    def add_user(self, bot, update, client, id):
+        from_id = id
+
+        from_name = ''
+
+        user = VkUser.fetch_user(client.vk_token, from_id)
+        from_name = user.get_name()
+        client.add_interaction_with(user)
+
+        self.updater.bot.sendMessage(chat_id=client.chat_id,
+                                     text=from_name)
+        client.persist()
+        return from_name
 
     def receive_vk_message(self, update, client):
         """

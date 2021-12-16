@@ -73,8 +73,8 @@ class Client:
         if self.next_action == action.MESSAGE:
             return self.picked_keyboard()
         return [['/download']] + [['/pick ' + user.get_name()]
-                                  for user in self.interacted_with
-                                  if not user.should_fetch()]
+                for user in self.interacted_with
+                if not user.should_fetch()]
 
     def picked_keyboard(self):
         return [['/unpick ' + self.next_recepient.get_name()],
@@ -89,7 +89,10 @@ class Client:
         if self.next_recepient != None:
             self.next_action = action.MESSAGE
         self.persist()
+        return self.next_recepient
 
+    def search(self, name):
+        return self.vk_user.search_chat(self.vk_token, name)
     def send_message(self, text):
         """
         Send message to picked user

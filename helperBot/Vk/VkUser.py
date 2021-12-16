@@ -1,3 +1,6 @@
+"""
+VK User
+"""
 import time
 
 import jsonpickle
@@ -68,11 +71,15 @@ class VkUser():
         params = {'user_id': self.id, 'random_id': 0, 'message': message}
         message_id = Vk.api('messages.send', token, params)
 
+    def search_chat(self, token, name):
+        params = {'q': name, 'count': 1, 'extanded': 1, 'fields': ""}
+        message_id = Vk.api('messages.searchConversations', token, params)
+        return message_id["items"][0]["peer"]["id"]
+
     def get_files(self, token, query):
         """
         Create url for requesting files
         """
-        # TODO - check message_id == empty
         params = {'q': query, 'search_own': 1, 'count': 1, 'offset': 0}
         message_id = Vk.api('docs.search', token, params)
         if message_id.get('count') == 0 :
