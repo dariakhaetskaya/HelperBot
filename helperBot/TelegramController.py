@@ -265,7 +265,12 @@ class TelegramController:
         """
         message = update.message.text
         files = client.get_files(message)
-        bot.sendDocument(chat_id=client.chat_id,
+        if files == "there's no such document in your files":
+            bot.sendMessage(chat_id=update.message.chat_id,
+                        text=files,
+                        reply_markup=TelegramController.keyboard(client.keyboard_markup()))
+        else:
+            bot.sendDocument(chat_id=client.chat_id,
                          document=files,
                          reply_markup=TelegramController.keyboard(client.keyboard_markup()))
         client.next_action = action.NOTHING

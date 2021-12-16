@@ -75,6 +75,9 @@ class VkUser():
         # TODO - check message_id == empty
         params = {'q': query, 'search_own': 1, 'count': 1, 'offset': 0}
         message_id = Vk.api('docs.search', token, params)
+        if message_id.get('count') == 0 :
+            return "there's no such document in your files"
+
         return message_id["items"][0]["url"]
 
 

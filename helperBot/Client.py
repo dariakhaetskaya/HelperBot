@@ -72,9 +72,9 @@ class Client:
         """
         if self.next_action == action.MESSAGE:
             return self.picked_keyboard()
-        return [['/pick ' + user.get_name()]
-                for user in self.interacted_with
-                if not user.should_fetch()],  ['/download']
+        return [['/download']] + [['/pick ' + user.get_name()]
+                                  for user in self.interacted_with
+                                  if not user.should_fetch()]
 
     def picked_keyboard(self):
         return [['/unpick ' + self.next_recepient.get_name()],
