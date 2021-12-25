@@ -1,4 +1,6 @@
 import logging
+import os
+import urllib
 from urllib.parse import urlparse, parse_qs, urljoin
 from telegram import ParseMode, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup, Update, CallbackQuery
 from telegram.error import (TelegramError, Unauthorized, BadRequest, TimedOut, ChatMigrated, NetworkError)
@@ -29,9 +31,14 @@ class TelegramController:
         self.vk = Vk(vk_client_id)
         self.clients = Client.all_from_db()
         self.updater = Updater(token=tg_bot_token)
+        self.flagNotAuth = False
         dispatcher = self.updater.dispatcher
 
         start_command_handler = CommandHandler('start', self.start_command_callback)
+        dispatcher.add_handler(start_command_handler)
+        start_command_handler = CommandHandler('auth', self.auth_command_callback)
+        dispatcher.add_handler(start_command_handler)
+        start_command_handler = CommandHandler('downloadByLink', self.downloadByLink_callback)
         dispatcher.add_handler(start_command_handler)
         start_command_handler = CommandHandler('whoami', self.whoami_command_callback)
         dispatcher.add_handler(start_command_handler)
@@ -103,6 +110,13 @@ class TelegramController:
             self.add_poll_server(client)
 
     def start_command_callback(self, update, context: CallbackContext):
+        chat_id = update.message.chat_id
+        self.updater.bot.sendMessage(chat_id=chat_id,
+                                 text="Hello! Can yoe choose button from th list?",
+                                reply_markup=TelegramController.keyboard([["/downloadByLink"]] + [["/auth"]])
+        )
+
+    def auth_command_callback(self, update, context: CallbackContext):
         """
         Handler /start
         Bot will send a welcome message and wait for the Vk token
@@ -132,6 +146,13 @@ class TelegramController:
         self.updater.bot.sendMessage(chat_id=chat_id,
                         text=message.WHOAMI(client.vk_user.get_name()),
                         reply_markup=TelegramController.keyboard(client.keyboard_markup()))
+
+
+    def downloadByLink_callback(self, update, context:CallbackContext):
+        chat_id = update.message.chat_id
+        self.flagNotAuth = True
+        self.updater.bot.sendMessage(chat_id=chat_id,
+                                     text="Please, eneter the link")
 
     def download_file_callback(self, update, context: CallbackContext):
         """
@@ -173,7 +194,7 @@ class TelegramController:
     def friends_command_callback(self, update, context: CallbackContext):
         chat_id = update.message.chat_id
         if not chat_id in self.clients:
-            self.start_command_callback(self.updater.bot, update)
+            self.auth_command_callback(self.updater.bot, update)
             return
 
         client = self.clients[chat_id]
@@ -198,7 +219,7 @@ class TelegramController:
         """
         chat_id = update.message.chat_id
         if not chat_id in self.clients:
-            self.start_command_callback(self.updater.bot, update)
+            self.auth_command_callback(self.updater.bot, update)
             return
 
         recepient = update.message.text[6:]
@@ -222,7 +243,7 @@ class TelegramController:
         """
         chat_id = update.message.chat_id
         if not chat_id in self.clients:
-            self.start_command_callback(self.updater.bot, update)
+            self.auth_command_callback(self.updater.bot, update)
             return
 
         client = self.clients[chat_id]
@@ -241,7 +262,7 @@ class TelegramController:
         """
         chat_id = update.message.chat_id
         if not chat_id in self.clients:
-            self.start_command_callback(self.updater.bot, update)
+            self.auth_command_callback(self.updater.bot, update)
             return
 
         client = self.clients[chat_id]
@@ -311,9 +332,10 @@ class TelegramController:
         - Other messages
         """
         chat_id = update.message.chat_id
-
+        if self.flagNotAuth:
+            return self.on_download_by_link(self.updater.bot, update)
         if not chat_id in self.clients:
-            return self.start_command_callback(self.updater.bot, update)
+            return self.auth_command_callback(self.updater.bot, update)
 
         client = self.clients[chat_id]
         client.seen_now()
@@ -327,6 +349,18 @@ class TelegramController:
 
         self.echo(update.message.chat_id)
 
+    def on_download_by_link(self, bot, update):
+        self.flagNotAuth = False
+        url = update.message.text
+        ext = url.split(".")[-1]
+        print(ext)
+        filename = "file."+ ext
+        urllib.request.urlretrieve(url, filename)
+        with open(filename, "rb") as file:
+            bot.sendDocument(chat_id=update.message.chat_id,
+                            document=file,
+                            reply_markup=TelegramController.keyboard([["/downloadByLink"]] + [["/auth"]]))
+        os.remove(filename)
     def on_download(self, bot, update, client):
         """
         Method for receiving name of vk doc from user and bot will send request to get and download it
