@@ -2,6 +2,7 @@ import logging
 import os
 import sys
 from logging.handlers import SysLogHandler
+from dotenv import load_dotenv
 
 from helperBot.TelegramController import TelegramController
 from helperBot.DataBaseController import DataBaseController
@@ -24,11 +25,18 @@ logger = logging.getLogger(__name__)
 
 
 def main():
-    tg_bot_token = ""
-    vk_client_id = ""
+    """
+    Create .env file in helperBot directory with following structure:
+    BOT_TOKEN=*********************
+    VK_CLIENT_ID=**********
+    """
+    load_dotenv()
+    tg_bot_token = os.getenv('BOT_TOKEN')
+    vk_client_id = os.getenv('VK_CLIENT_ID')
     use_webhook = bool(int(os.getenv('USE_WEBHOOK', '0')))
     app_port = int(os.getenv('PORT', '5000'))
     app_url = os.getenv('APP_URL', '')
+
     args = sys.argv[1:]
     db = DataBaseController()
     if len(args) > 0:

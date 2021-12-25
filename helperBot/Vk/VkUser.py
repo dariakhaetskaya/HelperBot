@@ -72,9 +72,14 @@ class VkUser():
         message_id = Vk.api('messages.send', token, params)
 
     def search_chat(self, token, name):
-        params = {'q': name, 'count': 1, 'extanded': 1, 'fields': ""}
+        params = {'q': name, 'count': 10, 'extanded': 1, 'fields': ""}
         message_id = Vk.api('messages.searchConversations', token, params)
         return message_id["items"][0]["peer"]["id"]
+
+    def load_friends(self, token):
+        params = {'user_id': self.id, 'order': 'hints', 'fields': "first_name, last_name"}
+        friends_list = Vk.api('friends.get', token, params)
+        return friends_list["items"]
 
     def get_files(self, token, query):
         """

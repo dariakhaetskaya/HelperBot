@@ -1,10 +1,10 @@
 import logging
-from asyncio import sleep
 from urllib.parse import urlparse, parse_qs, urljoin
-from telegram import ParseMode, ReplyKeyboardHide, ReplyKeyboardMarkup
+from telegram import ParseMode, ReplyKeyboardMarkup, InlineKeyboardButton, InlineKeyboardMarkup, Update, CallbackQuery
 from telegram.error import (TelegramError, Unauthorized, BadRequest, TimedOut, ChatMigrated, NetworkError)
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackQueryHandler, CallbackContext
 from telegram.ext.dispatcher import run_async
+
 from helperBot.DataBaseController import DataBaseController
 from helperBot.Client import Client
 from helperBot.Constants import action, message
@@ -15,11 +15,11 @@ from helperBot.Vk.VkUser import VkUser
 
 logger = logging.getLogger(__name__)
 
-
 class TelegramController:
     """
     Implementation of Telegram Controller aka Telegram Bot
     """
+
     def __init__(self, tg_bot_token, vk_client_id):
         """
         Init Bot
@@ -45,13 +45,33 @@ class TelegramController:
         dispatcher.add_handler(start_command_handler)
         start_command_handler = CommandHandler('user', self.user_chat)
         dispatcher.add_handler(start_command_handler)
+        start_command_handler = CommandHandler('friends', self.friends_command_callback)
+        dispatcher.add_handler(start_command_handler)
         unknown_handler = MessageHandler(Filters.command, self.unknown_command_callback)
         dispatcher.add_handler(unknown_handler)
         message_handler = MessageHandler(Filters.text, self.message_callback)
         dispatcher.add_handler(message_handler)
         dispatcher.add_error_handler(self.error_callback)
+        dispatcher.add_handler(CallbackQueryHandler(self.button))
 
         self.restore()
+
+    def button(self, update: Update, context: CallbackContext) -> None:
+        """Parses the CallbackQuery and updates the message text."""
+        query = update.callback_query
+        query.answer()
+
+        client = self.clients[query.message.chat_id]
+        client.seen_now()
+
+        username = self.add_user(self.updater.bot, update, client, query.data)
+        client.expect_message_to(username)
+
+        self.updater.bot.send_message(chat_id=query.message.chat_id,
+                    text=message.TYPE_MESSAGE(username),
+                    parse_mode=ParseMode.MARKDOWN,
+                    reply_markup=TelegramController.keyboard(client.keyboard_markup()))
+        # self.updater.bot.send_message(query.message.chat_id, str(query.data))
 
     def start(self, use_webhook=False, app_url=None, app_port=None):
         """
@@ -82,7 +102,7 @@ class TelegramController:
         for _, client in self.clients.items():
             self.add_poll_server(client)
 
-    def start_command_callback(self, bot, update):
+    def start_command_callback(self, update, context: CallbackContext):
         """
         Handler /start
         Bot will send a welcome message and wait for the Vk token
@@ -90,19 +110,18 @@ class TelegramController:
         chat_id = update.message.chat_id
         auth_url = self.vk.get_auth_url()
         # Send first info messages
-        bot.sendMessage(chat_id=chat_id,
-                        text=message.WELCOME(auth_url),
-                        reply_markup=ReplyKeyboardHide())
-        bot.sendMessage(chat_id=chat_id, text=message.COPY_TOKEN)
+        self.updater.bot.sendMessage(chat_id=chat_id,
+                        text=message.WELCOME(auth_url))
+        self.updater.bot.sendMessage(chat_id=chat_id, text=message.COPY_TOKEN)
         # Create new client
         client = Client(next_action=action.ACCESS_TOKEN,
                         chat_id=chat_id)
         self.clients[chat_id] = client
         client.persist()
 
-    def whoami_command_callback(self, bot, update):
+    def whoami_command_callback(self, update, context: CallbackContext):
         """
-        Handelr /whoami
+        Handler /whoami
         Bot will display information about Vk User
         """
         chat_id = update.message.chat_id
@@ -110,11 +129,11 @@ class TelegramController:
             return
 
         client = self.clients[chat_id]
-        bot.sendMessage(chat_id=chat_id,
+        self.updater.bot.sendMessage(chat_id=chat_id,
                         text=message.WHOAMI(client.vk_user.get_name()),
                         reply_markup=TelegramController.keyboard(client.keyboard_markup()))
 
-    def download_file_callback(self, bot, update):
+    def download_file_callback(self, update, context: CallbackContext):
         """
         Handler /download
         Bot will send a message and wait for the name of vk doc to download
@@ -123,35 +142,63 @@ class TelegramController:
         if not chat_id in self.clients:
             return
 
-        bot.sendMessage(chat_id=chat_id,
-                        text=message.DOWNLOAD,
-                        reply_markup=ReplyKeyboardHide())
+        self.updater.bot.sendMessage(chat_id=chat_id,
+                        text=message.DOWNLOAD)
         client = self.clients[chat_id]
         client.next_action = action.DOWNLOAD
         self.clients[chat_id] = client
         client.persist()
 
-    def user_chat(self, bot, update):
+    def user_chat(self, update, context: CallbackContext):
         chat_id = update.message.chat_id
         if not chat_id in self.clients:
             return
         client = self.clients[chat_id]
         recepient = update.message.text[6:]
         res = client.search(recepient)
-        bot.sendMessage(chat_id=chat_id,
-                        text=res,
-                        reply_markup=ReplyKeyboardHide())
+        self.updater.bot.sendMessage(chat_id=chat_id,
+                        text=res)
         self.clients[chat_id] = client
         client.persist()
 
-    def pick_command_callback(self, bot, update):
+    def build_menu(self, buttons, header_buttons=None, footer_buttons=None):
+        n_cols = 2
+        menu = [buttons[i:i + n_cols] for i in range(0, len(buttons), n_cols)]
+        if header_buttons:
+            menu.insert(0, header_buttons)
+        if footer_buttons:
+            menu.append(footer_buttons)
+        return menu
+
+    def friends_command_callback(self, update, context: CallbackContext):
+        chat_id = update.message.chat_id
+        if not chat_id in self.clients:
+            self.start_command_callback(self.updater.bot, update)
+            return
+
+        client = self.clients[chat_id]
+        client.seen_now()
+        friend_list = client.load_friends()
+
+        button_list = []
+        for each in friend_list:
+            button_list.append(
+                InlineKeyboardButton(each['first_name'] + " " + each['last_name'], callback_data=each['id']))
+        reply_markup = InlineKeyboardMarkup(self.build_menu(button_list))
+
+        self.updater.bot.sendMessage(chat_id=chat_id,
+                        text='Choose from the following',
+                        parse_mode=ParseMode.MARKDOWN,
+                        reply_markup=reply_markup)
+
+    def pick_command_callback(self, update, context: CallbackContext):
         """
         Handler /pick [vk_user in database]
         Bot will open chat with Vk user, who send message before
         """
         chat_id = update.message.chat_id
         if not chat_id in self.clients:
-            self.start_command_callback(bot, update)
+            self.start_command_callback(self.updater.bot, update)
             return
 
         recepient = update.message.text[6:]
@@ -160,73 +207,73 @@ class TelegramController:
         if client.expect_message_to(recepient) is None:
             res = client.search(recepient)
             print(res)
-            username = self.add_user(bot, update, client, res)
+            username = self.add_user(self.updater.bot, update, client, res)
             client.expect_message_to(username)
 
-        bot.sendMessage(chat_id=chat_id,
+        self.updater.bot.sendMessage(chat_id=chat_id,
                         text=message.TYPE_MESSAGE(recepient),
+                        parse_mode=ParseMode.MARKDOWN,
                         reply_markup=TelegramController.keyboard(client.keyboard_markup()))
 
-
-    def unpick_command_callback(self, bot, update):
+    def unpick_command_callback(self, update, context: CallbackContext):
         """
         Handler /unpick
         Bot will close chat with picked Vk user
         """
         chat_id = update.message.chat_id
         if not chat_id in self.clients:
-            self.start_command_callback(bot, update)
+            self.start_command_callback(self.updater.bot, update)
             return
 
         client = self.clients[chat_id]
         client.next_action = action.NOTHING
         client.persist()
-        bot.sendMessage(chat_id=chat_id,
+        self.updater.bot.sendMessage(chat_id=chat_id,
                         text=message.UNPICK(client.next_recepient.get_name()),
                         parse_mode=ParseMode.MARKDOWN,
                         reply_markup=TelegramController.keyboard(client.keyboard_markup()))
         client.next_recepient = None
 
-    def details_command_callback(self, bot, update):
+    def details_command_callback(self, update, context: CallbackContext):
         """
         Handler /details
         Bot display information about picked Vk user(photo and name)
         """
         chat_id = update.message.chat_id
         if not chat_id in self.clients:
-            self.start_command_callback(bot, update)
+            self.start_command_callback(self.updater.bot, update)
             return
 
         client = self.clients[chat_id]
         client.seen_now()
         user = client.next_recepient
         if user == None:
-            bot.sendMessage(chat_id=chat_id,
+            self.updater.bot.sendMessage(chat_id=chat_id,
                             text=message.FIRST_PICK_USER,
                             reply_markup=TelegramController.keyboard(client.keyboard_markup()))
             return
 
         if user.photo != None:
-            bot.sendPhoto(chat_id=chat_id, photo=user.photo)
+            self.updater.bot.sendPhoto(chat_id=chat_id, photo=user.photo)
 
-        bot.sendMessage(chat_id=chat_id,
+        self.updater.bot.sendMessage(chat_id=chat_id,
                         text=message.USER_NAME(user.get_name()),
                         parse_mode=ParseMode.MARKDOWN,
                         reply_markup=TelegramController.keyboard(client.keyboard_markup()))
 
         participants = user.participants()
         if participants != None:
-            bot.sendMessage(chat_id=chat_id,
+            self.updater.bot.sendMessage(chat_id=chat_id,
                             text=message.PARTICIPANTS(participants),
                             parse_mode=ParseMode.MARKDOWN,
                             reply_markup=TelegramController.keyboard(client.keyboard_markup()))
 
-    def unknown_command_callback(self, bot, update):
+    def unknown_command_callback(self, update, context: CallbackContext):
         """
         Handler /<unknown_command>
         Bot will send a message about the unknown command
         """
-        bot.sendMessage(chat_id=update.message.chat_id,
+        self.updater.bot.sendMessage(chat_id=update.message.chat_id,
                         text=message.UNKNOWN)
 
     def error_callback(self, bot, update, error):
@@ -254,7 +301,7 @@ class TelegramController:
             # handle all other telegram related errors
             logger.debug('Update {} caused error {}'.format(update, error))
 
-    def message_callback(self, bot, update):
+    def message_callback(self, update, context: CallbackContext):
         """
         Handler for user's messages to bot
         There are some cases of messages:
@@ -266,17 +313,17 @@ class TelegramController:
         chat_id = update.message.chat_id
 
         if not chat_id in self.clients:
-            return self.start_command_callback(bot, update)
+            return self.start_command_callback(self.updater.bot, update)
 
         client = self.clients[chat_id]
         client.seen_now()
 
         if client.next_action == action.ACCESS_TOKEN:
-            return self.on_token_message(bot, update, client)
+            return self.on_token_message(self.updater.bot, update, client)
         elif client.next_action == action.DOWNLOAD:
-            return self.on_download(bot, update, client)
+            return self.on_download(self.updater.bot, update, client)
         elif client.next_action == action.MESSAGE:
-            return self.on_typed_message(bot, update, client)
+            return self.on_typed_message(self.updater.bot, update, client)
 
         self.echo(update.message.chat_id)
 
@@ -394,7 +441,7 @@ class TelegramController:
         if from_id & 2000000000 == 2000000000:
             # Message came from chat
             chat_id = from_id - 2000000000
-            chat = VkChat.fetch(client.vk_token, chat_id,)
+            chat = VkChat.fetch(client.vk_token, chat_id, )
             from_name = chat.name_from(attachments['from'])
             client.add_interaction_with(chat)
         else:
@@ -407,3 +454,4 @@ class TelegramController:
                                      reply_markup=TelegramController.keyboard(client.keyboard_markup()),
                                      parse_mode=ParseMode.MARKDOWN)
         client.persist()
+

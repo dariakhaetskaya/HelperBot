@@ -38,13 +38,13 @@ action = _Action()
 class _Message():
     @staticmethod
     def WELCOME(link):
-        return ('Yo, first we need to authorize vk app.\n'
+        return ('Please authorize!'
                 'First, generate access token by '
                 'following the link: ' + link)
 
     @constant
     def DOWNLOAD():
-        return 'Write name of your doc'
+        return "Write me name of your file and I'll download it for you"
 
     @constant
     def COPY_TOKEN():
@@ -57,12 +57,12 @@ class _Message():
 
     @constant
     def ECHO():
-        return 'I am just a machine.'
+        return "Sorry, I didn't get it"
 
     @constant
     def UNKNOWN():
         return ('I have no clue about the command you specified. '
-                'Where did you find it from?')
+                'Where did you find it?')
 
     @staticmethod
     def NEW_MESSAGE(sender, text):
@@ -82,7 +82,7 @@ class _Message():
 
     @staticmethod
     def UNPICK(name):
-        return 'Enough *' + name + '* for today'
+        return 'You left conversation with *' + name + '*'
 
     @constant
     def FIRST_PICK_USER():

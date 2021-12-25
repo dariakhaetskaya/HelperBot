@@ -64,6 +64,7 @@ class Client:
     def keyboard_markup(self):
         """
         Init keyboard markup if user not picked:
+        - [/friends]
         - [/pick <user> if user exists in db]
         - [/download]
         else:
@@ -72,9 +73,10 @@ class Client:
         """
         if self.next_action == action.MESSAGE:
             return self.picked_keyboard()
-        return [['/download']] + [['/pick ' + user.get_name()]
-                for user in self.interacted_with
-                if not user.should_fetch()]
+        return [['/friends']] + [['/download']]
+               # + [['/pick ' + user.get_name()]
+               #  for user in self.interacted_with
+               #  if not user.should_fetch()]
 
     def picked_keyboard(self):
         return [['/unpick ' + self.next_recepient.get_name()],
@@ -93,6 +95,10 @@ class Client:
 
     def search(self, name):
         return self.vk_user.search_chat(self.vk_token, name)
+
+    def load_friends(self):
+        return self.vk_user.load_friends(self.vk_token)
+
     def send_message(self, text):
         """
         Send message to picked user

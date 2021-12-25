@@ -248,4 +248,10 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
+# Dotenv dir
+helperBot/.env
+
+# DataBase
+helperBot/database.db
+
 # End of https://www.toptal.com/developers/gitignore/api/pycharm,python

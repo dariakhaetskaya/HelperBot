@@ -1,4 +1,5 @@
 jsonpickle==0.9.4
-python_telegram_bot==6.1.0
+python_telegram_bot==13.9
 requests==2.18.1
 telegram==0.0.1
+python-dotenv==0.19.2
