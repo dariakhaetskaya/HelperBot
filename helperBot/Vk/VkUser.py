@@ -81,17 +81,26 @@ class VkUser():
         friends_list = Vk.api('friends.get', token, params)
         return friends_list["items"]
 
+    def list_files(self, token):
+        params = {'owner_id': self.id}
+        files_list = Vk.api('docs.get', token, params)
+        return files_list["items"]
+
+    def get_file_by_id(self, token, file_id):
+        params = {'docs': str(self.id) + "_" + str(file_id)}
+        response = Vk.api('docs.getById', token, params)
+        return response[0]["title"], response[0]["url"]
+
     def get_files(self, token, query):
         """
         Create url for requesting files
         """
         params = {'q': query, 'search_own': 1, 'count': 1, 'offset': 0}
         message_id = Vk.api('docs.search', token, params)
-        if message_id.get('count') == 0 :
+        if message_id.get('count') == 0:
             return "there's no such document in your files"
 
         return message_id["items"][0]["url"]
-
 
     def outdated(self):
         one_week = 60 * 24 * 7

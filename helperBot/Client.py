@@ -73,7 +73,7 @@ class Client:
         """
         if self.next_action == action.MESSAGE:
             return self.picked_keyboard()
-        return [['/friends']] + [['/download']]
+        return [['/friends']] + [['/download']] + [['/files']]
                # + [['/pick ' + user.get_name()]
                #  for user in self.interacted_with
                #  if not user.should_fetch()]
@@ -98,6 +98,12 @@ class Client:
 
     def load_friends(self):
         return self.vk_user.load_friends(self.vk_token)
+
+    def list_vk_files(self):
+        return self.vk_user.list_files(self.vk_token)
+
+    def get_file_by_vk_id(self, file_id):
+        return self.vk_user.get_file_by_id(self.vk_token, file_id)
 
     def send_message(self, text):
         """

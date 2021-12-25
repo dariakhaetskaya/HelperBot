@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 def main():
     """
-    Create .env file in helperBot directory with following structure:
+    Create .env file in /helperBot directory with the following structure:
     BOT_TOKEN=*********************
     VK_CLIENT_ID=**********
     """

@@ -1,3 +1,4 @@
+import ast
 import logging
 import os
 import urllib
@@ -16,6 +17,7 @@ from helperBot.Vk.VkChat import VkChat
 from helperBot.Vk.VkUser import VkUser
 
 logger = logging.getLogger(__name__)
+
 
 class TelegramController:
     """
@@ -50,6 +52,8 @@ class TelegramController:
         dispatcher.add_handler(start_command_handler)
         start_command_handler = CommandHandler('download', self.download_file_callback)
         dispatcher.add_handler(start_command_handler)
+        start_command_handler = CommandHandler('files', self.list_files_callback)
+        dispatcher.add_handler(start_command_handler)
         start_command_handler = CommandHandler('user', self.user_chat)
         dispatcher.add_handler(start_command_handler)
         start_command_handler = CommandHandler('friends', self.friends_command_callback)
@@ -71,14 +75,26 @@ class TelegramController:
         client = self.clients[query.message.chat_id]
         client.seen_now()
 
-        username = self.add_user(self.updater.bot, update, client, query.data)
-        client.expect_message_to(username)
+        if query.data.startswith("['user id'"):
+            username = self.add_user(self.updater.bot, update, client, query.data)
+            client.expect_message_to(username)
 
-        self.updater.bot.send_message(chat_id=query.message.chat_id,
-                    text=message.TYPE_MESSAGE(username),
-                    parse_mode=ParseMode.MARKDOWN,
-                    reply_markup=TelegramController.keyboard(client.keyboard_markup()))
-        # self.updater.bot.send_message(query.message.chat_id, str(query.data))
+            self.updater.bot.send_message(chat_id=query.message.chat_id,
+                                          text=message.TYPE_MESSAGE(username),
+                                          parse_mode=ParseMode.MARKDOWN,
+                                          reply_markup=TelegramController.keyboard(client.keyboard_markup()))
+
+        if query.data.startswith("['file id'"):
+            print(query)
+            print(type(ast.literal_eval(query.data)))
+            file_data = client.get_file_by_vk_id(ast.literal_eval(query.data).pop())
+            filename = file_data[0]
+            urllib.request.urlretrieve(file_data[1], filename)
+            with open(filename, "rb") as file:
+                self.updater.bot.sendDocument(chat_id=query.message.chat_id,
+                                              document=file,
+                                              reply_markup=TelegramController.keyboard(client.keyboard_markup()))
+            os.remove(filename)
 
     def start(self, use_webhook=False, app_url=None, app_port=None):
         """
@@ -112,9 +128,9 @@ class TelegramController:
     def start_command_callback(self, update, context: CallbackContext):
         chat_id = update.message.chat_id
         self.updater.bot.sendMessage(chat_id=chat_id,
-                                 text="Hello! Can yoe choose button from th list?",
-                                reply_markup=TelegramController.keyboard([["/downloadByLink"]] + [["/auth"]])
-        )
+                                     text="Hello! Can yoe choose button from th list?",
+                                     reply_markup=TelegramController.keyboard([["/downloadByLink"]] + [["/auth"]])
+                                     )
 
     def auth_command_callback(self, update, context: CallbackContext):
         """
@@ -125,7 +141,7 @@ class TelegramController:
         auth_url = self.vk.get_auth_url()
         # Send first info messages
         self.updater.bot.sendMessage(chat_id=chat_id,
-                        text=message.WELCOME(auth_url))
+                                     text=message.WELCOME(auth_url))
         self.updater.bot.sendMessage(chat_id=chat_id, text=message.COPY_TOKEN)
         # Create new client
         client = Client(next_action=action.ACCESS_TOKEN,
@@ -144,11 +160,10 @@ class TelegramController:
 
         client = self.clients[chat_id]
         self.updater.bot.sendMessage(chat_id=chat_id,
-                        text=message.WHOAMI(client.vk_user.get_name()),
-                        reply_markup=TelegramController.keyboard(client.keyboard_markup()))
+                                     text=message.WHOAMI(client.vk_user.get_name()),
+                                     reply_markup=TelegramController.keyboard(client.keyboard_markup()))
 
-
-    def downloadByLink_callback(self, update, context:CallbackContext):
+    def downloadByLink_callback(self, update, context: CallbackContext):
         chat_id = update.message.chat_id
         self.flagNotAuth = True
         self.updater.bot.sendMessage(chat_id=chat_id,
@@ -164,7 +179,7 @@ class TelegramController:
             return
 
         self.updater.bot.sendMessage(chat_id=chat_id,
-                        text=message.DOWNLOAD)
+                                     text=message.DOWNLOAD)
         client = self.clients[chat_id]
         client.next_action = action.DOWNLOAD
         self.clients[chat_id] = client
@@ -178,7 +193,7 @@ class TelegramController:
         recepient = update.message.text[6:]
         res = client.search(recepient)
         self.updater.bot.sendMessage(chat_id=chat_id,
-                        text=res)
+                                     text=res)
         self.clients[chat_id] = client
         client.persist()
 
@@ -204,13 +219,35 @@ class TelegramController:
         button_list = []
         for each in friend_list:
             button_list.append(
-                InlineKeyboardButton(each['first_name'] + " " + each['last_name'], callback_data=each['id']))
+                InlineKeyboardButton(each['first_name'] + " " + each['last_name'],
+                                     callback_data="['user id', '" + str(each['id']) + "']"))
         reply_markup = InlineKeyboardMarkup(self.build_menu(button_list))
 
         self.updater.bot.sendMessage(chat_id=chat_id,
-                        text='Choose from the following',
-                        parse_mode=ParseMode.MARKDOWN,
-                        reply_markup=reply_markup)
+                                     text='Choose from the following',
+                                     parse_mode=ParseMode.MARKDOWN,
+                                     reply_markup=reply_markup)
+
+    def list_files_callback(self, update, context: CallbackContext):
+        chat_id = update.message.chat_id
+        if not chat_id in self.clients:
+            self.auth_command_callback(self.updater.bot, update)
+            return
+
+        client = self.clients[chat_id]
+        client.seen_now()
+        file_list = client.list_vk_files()
+
+        button_list = []
+        for each in file_list:
+            print(each)
+            button_list.append(InlineKeyboardButton(each['title'], callback_data="['file id', '" + str(each['id']) + "']"))
+        reply_markup = InlineKeyboardMarkup(self.build_menu(button_list))
+
+        self.updater.bot.sendMessage(chat_id=chat_id,
+                                     text='Choose a file: ',
+                                     parse_mode=ParseMode.MARKDOWN,
+                                     reply_markup=reply_markup)
 
     def pick_command_callback(self, update, context: CallbackContext):
         """
@@ -232,9 +269,9 @@ class TelegramController:
             client.expect_message_to(username)
 
         self.updater.bot.sendMessage(chat_id=chat_id,
-                        text=message.TYPE_MESSAGE(recepient),
-                        parse_mode=ParseMode.MARKDOWN,
-                        reply_markup=TelegramController.keyboard(client.keyboard_markup()))
+                                     text=message.TYPE_MESSAGE(recepient),
+                                     parse_mode=ParseMode.MARKDOWN,
+                                     reply_markup=TelegramController.keyboard(client.keyboard_markup()))
 
     def unpick_command_callback(self, update, context: CallbackContext):
         """
@@ -250,9 +287,9 @@ class TelegramController:
         client.next_action = action.NOTHING
         client.persist()
         self.updater.bot.sendMessage(chat_id=chat_id,
-                        text=message.UNPICK(client.next_recepient.get_name()),
-                        parse_mode=ParseMode.MARKDOWN,
-                        reply_markup=TelegramController.keyboard(client.keyboard_markup()))
+                                     text=message.UNPICK(client.next_recepient.get_name()),
+                                     parse_mode=ParseMode.MARKDOWN,
+                                     reply_markup=TelegramController.keyboard(client.keyboard_markup()))
         client.next_recepient = None
 
     def details_command_callback(self, update, context: CallbackContext):
@@ -270,24 +307,24 @@ class TelegramController:
         user = client.next_recepient
         if user == None:
             self.updater.bot.sendMessage(chat_id=chat_id,
-                            text=message.FIRST_PICK_USER,
-                            reply_markup=TelegramController.keyboard(client.keyboard_markup()))
+                                         text=message.FIRST_PICK_USER,
+                                         reply_markup=TelegramController.keyboard(client.keyboard_markup()))
             return
 
         if user.photo != None:
             self.updater.bot.sendPhoto(chat_id=chat_id, photo=user.photo)
 
         self.updater.bot.sendMessage(chat_id=chat_id,
-                        text=message.USER_NAME(user.get_name()),
-                        parse_mode=ParseMode.MARKDOWN,
-                        reply_markup=TelegramController.keyboard(client.keyboard_markup()))
+                                     text=message.USER_NAME(user.get_name()),
+                                     parse_mode=ParseMode.MARKDOWN,
+                                     reply_markup=TelegramController.keyboard(client.keyboard_markup()))
 
         participants = user.participants()
         if participants != None:
             self.updater.bot.sendMessage(chat_id=chat_id,
-                            text=message.PARTICIPANTS(participants),
-                            parse_mode=ParseMode.MARKDOWN,
-                            reply_markup=TelegramController.keyboard(client.keyboard_markup()))
+                                         text=message.PARTICIPANTS(participants),
+                                         parse_mode=ParseMode.MARKDOWN,
+                                         reply_markup=TelegramController.keyboard(client.keyboard_markup()))
 
     def unknown_command_callback(self, update, context: CallbackContext):
         """
@@ -295,7 +332,7 @@ class TelegramController:
         Bot will send a message about the unknown command
         """
         self.updater.bot.sendMessage(chat_id=update.message.chat_id,
-                        text=message.UNKNOWN)
+                                     text=message.UNKNOWN)
 
     def error_callback(self, bot, update, error):
         """
@@ -354,13 +391,14 @@ class TelegramController:
         url = update.message.text
         ext = url.split(".")[-1]
         print(ext)
-        filename = "file."+ ext
+        filename = "file." + ext
         urllib.request.urlretrieve(url, filename)
         with open(filename, "rb") as file:
             bot.sendDocument(chat_id=update.message.chat_id,
-                            document=file,
-                            reply_markup=TelegramController.keyboard([["/downloadByLink"]] + [["/auth"]]))
+                             document=file,
+                             reply_markup=TelegramController.keyboard([["/downloadByLink"]] + [["/auth"]]))
         os.remove(filename)
+
     def on_download(self, bot, update, client):
         """
         Method for receiving name of vk doc from user and bot will send request to get and download it
@@ -488,4 +526,3 @@ class TelegramController:
                                      reply_markup=TelegramController.keyboard(client.keyboard_markup()),
                                      parse_mode=ParseMode.MARKDOWN)
         client.persist()
-
