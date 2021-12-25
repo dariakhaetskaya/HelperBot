@@ -75,6 +75,16 @@ class TelegramController:
         client = self.clients[query.message.chat_id]
         client.seen_now()
 
+        if query.data.startswith("<-Friends"):
+            if client.offset_friends >= 16:
+                client.prev_message_id_friends = query.message.message_id
+                client.offset_friends -= 16
+                self.friends_command_callback(update, context, client.chat_id)
+        elif query.data.startswith("->Friends"):
+            client.prev_message_id_friends = query.message.message_id
+            client.offset_friends += 16
+            self.friends_command_callback(update, context, client.chat_id)
+
         if query.data.startswith("['user id'"):
             username = self.add_user(self.updater.bot, update, client, query.data)
             client.expect_message_to(username)
@@ -83,6 +93,16 @@ class TelegramController:
                                           text=message.TYPE_MESSAGE(username),
                                           parse_mode=ParseMode.MARKDOWN,
                                           reply_markup=TelegramController.keyboard(client.keyboard_markup()))
+
+        if query.data.startswith("<-Files"):
+            if client.offset_files >= 16:
+                client.prev_message_id_files = query.message.message_id
+                client.offset_files -= 16
+                self.list_files_callback(update, context, client.chat_id)
+        elif query.data.startswith("->Files"):
+            client.prev_message_id_files = query.message.message_id
+            client.offset_files += 16
+            self.list_files_callback(update, context, client.chat_id)
 
         if query.data.startswith("['file id'"):
             print(query)
@@ -206,48 +226,74 @@ class TelegramController:
             menu.append(footer_buttons)
         return menu
 
-    def friends_command_callback(self, update, context: CallbackContext):
-        chat_id = update.message.chat_id
-        if not chat_id in self.clients:
-            self.auth_command_callback(self.updater.bot, update)
-            return
+    def friends_command_callback(self, update, context: CallbackContext, chatID=None):
+        count = 16
+        if chatID is None:
+            chat_id = update.message.chat_id
+            if not chat_id in self.clients:
+                self.auth_command_callback(self.updater.bot, update)
+                return
+        else:
+            chat_id = chatID
 
         client = self.clients[chat_id]
         client.seen_now()
-        friend_list = client.load_friends()
+        friend_list = client.load_friends(count, client.offset_friends)
 
         button_list = []
         for each in friend_list:
             button_list.append(
                 InlineKeyboardButton(each['first_name'] + " " + each['last_name'],
                                      callback_data="['user id', '" + str(each['id']) + "']"))
-        reply_markup = InlineKeyboardMarkup(self.build_menu(button_list))
+        button_list.append(InlineKeyboardButton('⬅️', callback_data="<-Friends"))
+        button_list.append(InlineKeyboardButton('➡️', callback_data="->Friends"))
 
-        self.updater.bot.sendMessage(chat_id=chat_id,
+        reply_markup = InlineKeyboardMarkup(self.build_menu(button_list))
+        if chatID is None:
+            self.updater.bot.sendMessage(chat_id=chat_id,
                                      text='Choose from the following',
                                      parse_mode=ParseMode.MARKDOWN,
                                      reply_markup=reply_markup)
+        else:
+            self.updater.bot.edit_message_text(chat_id=chat_id,
+                                               message_id=client.prev_message_id_friends,
+                                               text='Choose from the following',
+                                               parse_mode=ParseMode.MARKDOWN,
+                                               reply_markup=reply_markup)
 
-    def list_files_callback(self, update, context: CallbackContext):
-        chat_id = update.message.chat_id
-        if not chat_id in self.clients:
-            self.auth_command_callback(self.updater.bot, update)
-            return
+    def list_files_callback(self, update, context: CallbackContext, chatID=None):
+        count = 16
+        if chatID is None:
+            chat_id = update.message.chat_id
+            if not chat_id in self.clients:
+                self.auth_command_callback(self.updater.bot, update)
+                return
+        else:
+            chat_id = chatID
 
         client = self.clients[chat_id]
         client.seen_now()
-        file_list = client.list_vk_files()
+        file_list = client.list_vk_files(count, client.offset_files)
 
         button_list = []
         for each in file_list:
             print(each)
             button_list.append(InlineKeyboardButton(each['title'], callback_data="['file id', '" + str(each['id']) + "']"))
+        button_list.append(InlineKeyboardButton('⬅️', callback_data="<-Files"))
+        button_list.append(InlineKeyboardButton('➡️', callback_data="->Files"))
         reply_markup = InlineKeyboardMarkup(self.build_menu(button_list))
 
-        self.updater.bot.sendMessage(chat_id=chat_id,
+        if chatID is None:
+            self.updater.bot.sendMessage(chat_id=chat_id,
                                      text='Choose a file: ',
                                      parse_mode=ParseMode.MARKDOWN,
                                      reply_markup=reply_markup)
+        else:
+            self.updater.bot.edit_message_text(chat_id=chat_id,
+                                               message_id=client.prev_message_id_files,
+                                               text='Choose a file: ',
+                                               parse_mode=ParseMode.MARKDOWN,
+                                               reply_markup=reply_markup)
 
     def pick_command_callback(self, update, context: CallbackContext):
         """

@@ -24,6 +24,10 @@ class Client:
         self.next_action = next_action
         self.chat_id = chat_id
         self.vk_user = VkUser()
+        self.offset_friends = 0
+        self.prev_message_id_friends = 0
+        self.offset_files = 0
+        self.prev_message_id_files = 0
         self.vk_token = None
         self.next_server = None
         self.interacted_with = set()  # set of chats or users
@@ -96,11 +100,11 @@ class Client:
     def search(self, name):
         return self.vk_user.search_chat(self.vk_token, name)
 
-    def load_friends(self):
-        return self.vk_user.load_friends(self.vk_token)
+    def load_friends(self, count, offset):
+        return self.vk_user.load_friends(self.vk_token, count, offset)
 
-    def list_vk_files(self):
-        return self.vk_user.list_files(self.vk_token)
+    def list_vk_files(self, count, offset):
+        return self.vk_user.list_files(self.vk_token, count, offset)
 
     def get_file_by_vk_id(self, file_id):
         return self.vk_user.get_file_by_id(self.vk_token, file_id)

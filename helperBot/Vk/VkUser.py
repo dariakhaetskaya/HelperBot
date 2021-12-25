@@ -76,13 +76,13 @@ class VkUser():
         message_id = Vk.api('messages.searchConversations', token, params)
         return message_id["items"][0]["peer"]["id"]
 
-    def load_friends(self, token):
-        params = {'user_id': self.id, 'order': 'hints', 'fields': "first_name, last_name"}
+    def load_friends(self, token, count, offset):
+        params = {'user_id': self.id, 'order': 'hints', 'count': count, 'offset': offset, 'fields': "first_name, last_name"}
         friends_list = Vk.api('friends.get', token, params)
         return friends_list["items"]
 
-    def list_files(self, token):
-        params = {'owner_id': self.id}
+    def list_files(self, token, count, offset):
+        params = {'owner_id': self.id, 'count': count, 'offset': offset}
         files_list = Vk.api('docs.get', token, params)
         return files_list["items"]
 
