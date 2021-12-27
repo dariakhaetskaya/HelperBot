@@ -38,7 +38,7 @@ class TelegramController:
 
         start_command_handler = CommandHandler('start', self.start_command_callback)
         dispatcher.add_handler(start_command_handler)
-        start_command_handler = CommandHandler('auth', self.auth_command_callback)
+        start_command_handler = CommandHandler('authenticate', self.auth_command_callback)
         dispatcher.add_handler(start_command_handler)
         start_command_handler = CommandHandler('downloadByLink', self.downloadByLink_callback)
         dispatcher.add_handler(start_command_handler)
@@ -69,6 +69,7 @@ class TelegramController:
 
     def button(self, update: Update, context: CallbackContext) -> None:
         """Parses the CallbackQuery and updates the message text."""
+        buttons_to_display = 16
         query = update.callback_query
         query.answer()
 
@@ -76,13 +77,13 @@ class TelegramController:
         client.seen_now()
 
         if query.data.startswith("<-Friends"):
-            if client.offset_friends >= 16:
+            if client.offset_friends >= buttons_to_display:
                 client.prev_message_id_friends = query.message.message_id
-                client.offset_friends -= 16
+                client.offset_friends -= buttons_to_display
                 self.friends_command_callback(update, context, client.chat_id)
         elif query.data.startswith("->Friends"):
             client.prev_message_id_friends = query.message.message_id
-            client.offset_friends += 16
+            client.offset_friends += buttons_to_display
             self.friends_command_callback(update, context, client.chat_id)
 
         if query.data.startswith("['user id'"):
@@ -95,13 +96,13 @@ class TelegramController:
                                           reply_markup=TelegramController.keyboard(client.keyboard_markup()))
 
         if query.data.startswith("<-Files"):
-            if client.offset_files >= 16:
+            if client.offset_files >= buttons_to_display:
                 client.prev_message_id_files = query.message.message_id
-                client.offset_files -= 16
+                client.offset_files -= buttons_to_display
                 self.list_files_callback(update, context, client.chat_id)
         elif query.data.startswith("->Files"):
             client.prev_message_id_files = query.message.message_id
-            client.offset_files += 16
+            client.offset_files += buttons_to_display
             self.list_files_callback(update, context, client.chat_id)
 
         if query.data.startswith("['file id'"):
@@ -148,8 +149,8 @@ class TelegramController:
     def start_command_callback(self, update, context: CallbackContext):
         chat_id = update.message.chat_id
         self.updater.bot.sendMessage(chat_id=chat_id,
-                                     text="Hello! Can yoe choose button from th list?",
-                                     reply_markup=TelegramController.keyboard([["/downloadByLink"]] + [["/auth"]])
+                                     text=message.HELLO,
+                                     reply_markup=TelegramController.keyboard([["/downloadByLink"]] + [["/authenticate"]])
                                      )
 
     def auth_command_callback(self, update, context: CallbackContext):
@@ -187,7 +188,7 @@ class TelegramController:
         chat_id = update.message.chat_id
         self.flagNotAuth = True
         self.updater.bot.sendMessage(chat_id=chat_id,
-                                     text="Please, eneter the link")
+                                     text=message.ENTER_LINK)
 
     def download_file_callback(self, update, context: CallbackContext):
         """
@@ -251,13 +252,13 @@ class TelegramController:
         reply_markup = InlineKeyboardMarkup(self.build_menu(button_list))
         if chatID is None:
             self.updater.bot.sendMessage(chat_id=chat_id,
-                                     text='Choose from the following',
+                                     text=message.CHOOSE_OPTION,
                                      parse_mode=ParseMode.MARKDOWN,
                                      reply_markup=reply_markup)
         else:
             self.updater.bot.edit_message_text(chat_id=chat_id,
                                                message_id=client.prev_message_id_friends,
-                                               text='Choose from the following',
+                                               text=message.CHOOSE_OPTION,
                                                parse_mode=ParseMode.MARKDOWN,
                                                reply_markup=reply_markup)
 

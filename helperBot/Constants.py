@@ -92,5 +92,16 @@ class _Message():
     def PARTICIPANTS(participants):
         return '*In chat:* ' + participants
 
+    @constant
+    def HELLO():
+        return 'Hello! This is your helper bot, authenticate to start messaging or use /download command to get file by link'
+
+    @constant
+    def ENTER_LINK():
+        return 'Please, eneter the link'
+
+    @constant
+    def CHOOSE_OPTION():
+        return 'Choose from the following'
 
 message = _Message()
